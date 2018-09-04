@@ -19,7 +19,7 @@ from oslo_config import cfg
 from oslo_log import log as logging
 from neutron import version
 
-from neutron.common import constants as l3_constants
+from neutron_lib import constants as l3_constants
 
 from neutron.db import models_v2, l3_db
 
@@ -28,27 +28,27 @@ from neutron.db.external_net_db import ExternalNetwork
 from oslo_db.sqlalchemy import session
 import neutron.plugins.ml2.models as ml2_db
 
-from networking_fortinet.common import resources
-from networking_fortinet.common import utils
-from networking_fortinet.ml2 import mech_fortinet
-from networking_fortinet.services.l3_router import l3_fortinet
-from networking_fortinet.tasks import tasks
-from networking_fortinet.tasks import constants as t_consts
-from networking_fortinet.db import models as fortinet_db
+from bell_fortinet.common import resources
+from bell_fortinet.common import utils
+from bell_fortinet.ml2 import mech_fortinet
+from bell_fortinet.services.l3_router import l3_fortinet
+from bell_fortinet.tasks import tasks
+from bell_fortinet.tasks import constants as t_consts
+from bell_fortinet.db import models as fortinet_db
 
 ROUTER_INTF = l3_constants.DEVICE_OWNER_ROUTER_INTF
 ROUTER_GW = l3_constants.DEVICE_OWNER_ROUTER_GW
 
-#streamlog = handlers.ColorHandler()
+# streamlog = handlers.ColorHandler()
 LOG = logging.getLogger(None).logger
-#LOG.addHandler(streamlog)
+# LOG.addHandler(streamlog)
 
 CFG_ARGS = [
-             '--config-file',
-             '/etc/neutron/neutron.conf',
-             '--config-file',
-             '/etc/neutron/plugin.ini'
-           ]
+    '--config-file',
+    '/etc/neutron/neutron.conf',
+    '--config-file',
+    '/etc/neutron/plugin.ini'
+]
 
 CFG_KWARGS = {}
 SUPPORTED_DR = ['vlan']
@@ -57,23 +57,26 @@ cfg.CONF(args=CFG_ARGS, project='neutron',
          version='%%prog %s' % version.version_info.release_string(),
          **CFG_KWARGS)
 cfg.CONF.import_group('ml2_fortinet',
-                'networking_fortinet.common.config')
+                      'bell_fortinet.common.config')
+cfg.CONF.import_group('ml2',
+                      'bell_fortinet.common.config')
+
 
 class Progress(object):
     def __init__(self, total, name=''):
-       self.i = 0
-       self.total = total if total else 1
-       print "Starting %s:" % name
+        self.i = 0
+        self.total = total if total else 1
+        print "Starting %s:" % name
 
     def __enter__(self):
         return self
 
     def update(self):
         self.i += 1
-        self.percent = float(self.i)/self.total
+        self.percent = float(self.i) / self.total
         sys.stdout.write('\r[{0:<30}] {1:.0%}'.format(
-                '=' * int(round(self.percent * 29)) + '>', self.percent
-            ))
+            '=' * int(round(self.percent * 29)) + '>', self.percent
+        ))
         sys.stdout.flush()
         time.sleep(0.2)
 
@@ -84,21 +87,27 @@ class Progress(object):
 class Fake_context(object):
     def __init__(self, args=CFG_ARGS, kwargs=CFG_KWARGS):
         engine = session.EngineFacade.from_config(cfg.CONF)
-        if not [driver for driver in cfg.CONF.ml2.type_drivers
-                       if driver in SUPPORTED_DR]:
+
+        drivers = cfg.CONF.ml2.type_drivers.split(",")
+
+        if not [driver for driver in drivers
+                if driver in SUPPORTED_DR]:
             LOG.error(_("The supported type driver %(sdr)s are not in the "
-                          "ml2 type drivers %(td)s in the plugin config file.")
-                        % {'sdr': SUPPORTED_DR,
-                           'td': cfg.CONF.ml2.type_drivers})
+                        "ml2 type drivers %(td)s in the plugin config file.")
+                      % {'sdr': SUPPORTED_DR,
+                         'td': cfg.CONF.ml2.type_drivers})
             exit()
+
         self.session = engine.get_session(autocommit=True,
                                           expire_on_commit=False)
         self.request_id = 'migration_context'
+
 
 class Fake_mech_context(object):
     def __init__(self, **kwargs):
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
+
 
 class Fake_FortinetL3ServicePlugin(l3_fortinet.FortinetL3ServicePlugin):
     def __init__(self):
@@ -109,7 +118,7 @@ class Fake_FortinetL3ServicePlugin(l3_fortinet.FortinetL3ServicePlugin):
         self.Fortinet_init()
 
     def create_router(self, context, router):
-        LOG.debug("create_router: router=%s" % (router))
+        LOG.info("create_router: router=%s" % (router))
         # Limit one router per tenant
         if not router.get('router', None):
             return
@@ -125,15 +134,14 @@ class Fake_FortinetL3ServicePlugin(l3_fortinet.FortinetL3ServicePlugin):
                 utils._rollback_on_err(self, context, e)
         utils.update_status(self, context, t_consts.TaskStatus.COMPLETED)
 
-
     def add_router_interface(self, context, port):
         """creates vlnk on the fortinet device."""
         db_namespace = fortinet_db.query_record(context,
-                                fortinet_db.Fortinet_ML2_Namespace,
-                                tenant_id=port['tenant_id'])
+                                                fortinet_db.Fortinet_ML2_Namespace,
+                                                tenant_id=port['tenant_id'])
         vlan_inf = utils.get_intf(context, port['network_id'])
         int_intf, ext_intf = utils.get_vlink_intf(self, context,
-                                       vdom=db_namespace.vdom)
+                                                  vdom=db_namespace.vdom)
         utils.add_fwpolicy(self, context,
                            vdom=db_namespace.vdom,
                            srcintf=vlan_inf,
@@ -143,11 +151,10 @@ class Fake_FortinetL3ServicePlugin(l3_fortinet.FortinetL3ServicePlugin):
     def _get_floatingip(self, context, id):
         return fortinet_db.query_record(context, l3_db.FloatingIP, id=id)
 
-
     def create_floatingip(self, context, floatingip, returned_obj):
         """Create floating IP.
         """
-        LOG.debug(_("create_floatingip: floatingip=%s" % floatingip))
+        LOG.info(_("create_floatingip: floatingip=%s" % floatingip))
         self._allocate_floatingip(context, returned_obj)
         if returned_obj.get('port_id', None):
             if not floatingip['floatingip'].get('fixed_ip_address', None):
@@ -156,14 +163,16 @@ class Fake_FortinetL3ServicePlugin(l3_fortinet.FortinetL3ServicePlugin):
             self._associate_floatingip(context, returned_obj['id'],
                                        floatingip)
             self.update_floatingip_status(context, returned_obj,
-                                l3_constants.FLOATINGIP_STATUS_ACTIVE,
-                                id=returned_obj['id'])
+                                          l3_constants.FLOATINGIP_STATUS_ACTIVE,
+                                          id=returned_obj['id'])
         return returned_obj
+
 
 def init_mech_driver():
     mech_driver = mech_fortinet.FortinetMechanismDriver()
     mech_driver.initialize()
     return mech_driver
+
 
 def reset(dictionary):
     for key, value in dictionary.iteritems():
@@ -181,6 +190,7 @@ def reset(dictionary):
             raise TypeError
     return dictionary
 
+
 def cls2dict(record, dictionary, **kwargs):
     for key, value in record.__dict__.iteritems():
         if key in dictionary:
@@ -188,6 +198,7 @@ def cls2dict(record, dictionary, **kwargs):
         elif key in kwargs:
             dictionary[kwargs[key]] = value
     return dictionary
+
 
 def network_migration(context, mech_driver):
     """
@@ -213,7 +224,7 @@ def network_migration(context, mech_driver):
         'network_type': u'vlan'
     }]
     """
-    net =  {
+    net = {
         'name': '',
         'tenant_id': '',
         'provider: network_type': '',
@@ -236,7 +247,7 @@ def network_migration(context, mech_driver):
                                               network_id=record.id)
             cls2dict(record, net)
             db_extnet = fortinet_db.query_record(context, ExternalNetwork,
-                                              network_id=record.id)
+                                                 network_id=record.id)
             if db_extnet:
                 net['router:external'] = True
 
@@ -251,7 +262,7 @@ def network_migration(context, mech_driver):
 
 def subnet_migration(context, mech_driver):
     # table subnets
-    subnet =  {
+    subnet = {
         'allocation_pools': [{
             'start': '172.20.21.2',
             'end': '172.20.21.254'
@@ -276,8 +287,8 @@ def subnet_migration(context, mech_driver):
             reset(subnet)
             reset(ipallocation_pool)
             db_ipallocation = fortinet_db.query_record(context,
-                                                models_v2.IPAllocationPool,
-                                                subnet_id=record.id)
+                                                       models_v2.IPAllocationPool,
+                                                       subnet_id=record.id)
             cls2dict(db_ipallocation, ipallocation_pool,
                      first_ip='start', last_ip='end')
             db_dnssrvs = fortinet_db.query_records(context,
@@ -293,6 +304,7 @@ def subnet_migration(context, mech_driver):
                                              current=subnet)
             mech_driver.create_subnet_postcommit(mech_context)
             p.update()
+
 
 def port_migration(context, mech_driver, l3_driver):
     """
@@ -348,7 +360,7 @@ def port_migration(context, mech_driver, l3_driver):
     MAC = utils.get_mac(mech_driver, context)
     records = fortinet_db.query_records(context, models_v2.Port)
     with Progress(len(records), 'port_migration') as p:
-         for record in records:
+        for record in records:
             reset(port)
             cls2dict(record, port)
             if port['fixed_ips']:
@@ -358,10 +370,10 @@ def port_migration(context, mech_driver, l3_driver):
                     fixed_ips.append(ipallocation)
                 port['fixed_ips'] = fixed_ips
             if port['device_owner'] in [ROUTER_INTF, ROUTER_GW] and \
-               MAC not in port['mac_address']:
+                    MAC not in port['mac_address']:
                 port['mac_address'] = MAC
                 if not fortinet_db.query_count(context, models_v2.Port,
-                    mac_address=MAC, network_id=record.network_id):
+                                               mac_address=MAC, network_id=record.network_id):
                     fortinet_db.update_record(context, record,
                                               mac_address=MAC)
             mech_context = Fake_mech_context(_plugin_context=context,
@@ -437,7 +449,7 @@ def floatingip_migration(context, l3_driver):
         'status': 'DOWN',
         'port_id': None,
         'id': '78764016-da62-42fd-96a4-f2bd0510b5bc'
-        }
+    }
     floatingip = {'floatingip': returned_obj}
     records = fortinet_db.query_records(context, l3_db.FloatingIP)
     with Progress(len(records), 'floatingip_migration') as p:
@@ -459,10 +471,9 @@ def main():
         port_migration(context, mech_driver, l3_driver)
         floatingip_migration(context, l3_driver)
     except Exception as e:
-        raise(e)
+        raise (e)
     print "\nmigration completed.\n"
 
 
 if __name__ == "__main__":
     main()
-
