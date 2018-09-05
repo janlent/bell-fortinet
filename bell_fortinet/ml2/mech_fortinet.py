@@ -40,7 +40,6 @@ from bell_fortinet.db import models as fortinet_db
 from bell_fortinet.tasks import constants as t_consts
 from bell_fortinet.tasks import tasks
 
-
 LOG = logging.getLogger(__name__)
 
 
@@ -49,29 +48,28 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
 
     def __init__(self):
         super(FortinetMechanismDriver, self).__init__()
-
         self._driver = None
         self._fortigate = None
         self.task_manager = tasks.TaskManager()
         self.task_manager.start()
 
     def check_segment_for_agent(self, segment, agent):
-            mappings = agent['configurations'].get('bridge_mappings', {})
-            tunnel_types = agent['configurations'].get('tunnel_types', [])
-            LOG.debug("Checking segment: %(segment)s "
-                      "for mappings: %(mappings)s "
-                      "with tunnel_types: %(tunnel_types)s",
-                      {'segment': segment, 'mappings': mappings,
-                       'tunnel_types': tunnel_types})
-            network_type = segment[driver_api.NETWORK_TYPE]
-            if network_type == 'local':
-                return True
-            elif network_type in tunnel_types:
-                return True
-            elif network_type in ['flat', 'vlan']:
-                return segment[driver_api.PHYSICAL_NETWORK] in mappings
-            else:
-                return False
+        mappings = agent['configurations'].get('bridge_mappings', {})
+        tunnel_types = agent['configurations'].get('tunnel_types', [])
+        LOG.debug("Checking segment: %(segment)s "
+                  "for mappings: %(mappings)s "
+                  "with tunnel_types: %(tunnel_types)s",
+                  {'segment': segment, 'mappings': mappings,
+                   'tunnel_types': tunnel_types})
+        network_type = segment[driver_api.NETWORK_TYPE]
+        if network_type == 'local':
+            return True
+        elif network_type in tunnel_types:
+            return True
+        elif network_type in ['flat', 'vlan']:
+            return segment[driver_api.PHYSICAL_NETWORK] in mappings
+        else:
+            return False
 
     def initialize(self):
         """Initilize of variables needed by this class."""
@@ -90,6 +88,8 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
         try:
             utils.add_vdom(self, session, vdom=const.EXT_VDOM,
                            tenant_id=const.FAKE_TENANT_ID)
+            LOG.error(">>>---<<<<<<<<<<")
+            LOG.error(self._fortigate['ext_interface'])
             utils.set_vlanintf(self, session, vdom=const.EXT_VDOM,
                                name=self._fortigate['ext_interface'])
         except Exception as e:
@@ -120,7 +120,7 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
                 cls.init_records(session, **kwargs)
         except IndexError:
             LOG.error(_LE("The number of the configure range is not even,"
-                        "the last one of %(param)s can not be used"),
+                          "the last one of %(param)s can not be used"),
                       {'param': param})
             raise IndexError
 
@@ -135,8 +135,8 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
             result = const.FORTINET_PARAMS[param]['range'](min, max)
         else:
             result = const.FORTINET_PARAMS[param]['range'](
-                                _type(self._fortigate[param]),
-                                const.FORTINET_PARAMS[param]['netmask'])
+                _type(self._fortigate[param]),
+                const.FORTINET_PARAMS[param]['netmask'])
 
         return result if isinstance(result, list) else list(result)
 
@@ -160,7 +160,7 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
         segment = mech_context.network_segments[0]
         LOG.debug("network is created in tenant %(tenant_id)s,"
                   "segment id is %(segment)s", {"tenant_id": tenant_id,
-                   "segment": segment['segmentation_id']})
+                                                "segment": segment['segmentation_id']})
         # currently supports only one segment per network
         if segment['network_type'] != 'vlan':
             raise Exception(_("Fortinet Mechanism: failed to create network,"
@@ -201,8 +201,8 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
             return
         tenant_id = network['tenant_id']
         namespace = fortinet_db.query_record(context,
-                                    fortinet_db.Fortinet_ML2_Namespace,
-                                    tenant_id=tenant_id)
+                                             fortinet_db.Fortinet_ML2_Namespace,
+                                             tenant_id=tenant_id)
         if not namespace:
             return
         # TODO(samsu): type driver support vlan only,
@@ -211,7 +211,7 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
         inf_name = const.PREFIX['inf'] + str(vlanid)
         try:
             utils.delete_vlanintf(self, context, name=inf_name,
-                     vdom=namespace.vdom)
+                                  vdom=namespace.vdom)
         except Exception as e:
             resources.Exinfo(e)
             raise ml2_exc.MechanismDriverError(
@@ -229,7 +229,7 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
             try:
                 utils.delete_vdom(self, context, tenant_id=tenant_id)
                 LOG.info(_LI("delete network postcommit: tenant= %(tenant_id)s"
-                           " network= %(network)s"),
+                             " network= %(network)s"),
                          {'tenant_id': tenant_id, 'network': network})
             except Exception as e:
                 resources.Exinfo(e)
@@ -289,12 +289,12 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
                             gateway=gateway)
             else:
                 namespace = fortinet_db.query_record(context,
-                                        fortinet_db.Fortinet_ML2_Namespace,
-                                        tenant_id=tenant_id)
+                                                     fortinet_db.Fortinet_ML2_Namespace,
+                                                     tenant_id=tenant_id)
                 interface = utils.get_intf(context,
                                            mech_context.current['network_id'])
                 netmask = str(netaddr.
-                            IPNetwork(mech_context.current['cidr']).netmask)
+                              IPNetwork(mech_context.current['cidr']).netmask)
                 start_ip = mech_context.current['allocation_pools'][0]['start']
                 end_ip = mech_context.current['allocation_pools'][0]['end']
                 dhcp_func(self, context,
@@ -359,14 +359,14 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
         LOG.debug("create_port_precommit mech_context = %s", mech_context)
         context = mech_context._plugin_context
         namespace = fortinet_db.query_record(context,
-                            fortinet_db.Fortinet_ML2_Namespace,
-                            tenant_id=port['tenant_id'])
+                                             fortinet_db.Fortinet_ML2_Namespace,
+                                             tenant_id=port['tenant_id'])
         port_id = port['id']
         subnet_id = port['fixed_ips'][0]['subnet_id']
         ip_address = port['fixed_ips'][0]['ip_address']
         mac = port['mac_address']
         db_subnetv2 = fortinet_db.query_record(context, models_v2.Subnet,
-                                             id=subnet_id)
+                                               id=subnet_id)
         if port['device_owner'] in ['network:router_gateway']:
             if fortinet_db.query_record(context, ext_db.ExternalNetwork,
                                         network_id=port['network_id']):
@@ -386,9 +386,9 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
                 cidr = netaddr.IPNetwork(db_subnetv2.cidr)
                 subnet = ' '.join([str(cidr.network), str(cidr.netmask)])
                 utils.add_fwaddress(self, context,
-                                   vdom=namespace.vdom,
-                                   name=str(cidr.network),
-                                   subnet=subnet)
+                                    vdom=namespace.vdom,
+                                    name=str(cidr.network),
+                                    subnet=subnet)
                 addrgrp_name = const.PREFIX['addrgrp'] + namespace.vdom
                 utils.add_addrgrp(self, context,
                                   name=addrgrp_name,
@@ -418,14 +418,14 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
             port_id = port['id']
             subnet_id = port['fixed_ips'][0]['subnet_id']
             db_subnet = fortinet_db.query_record(context,
-                                             fortinet_db.Fortinet_ML2_Subnet,
-                                             subnet_id=subnet_id)
+                                                 fortinet_db.Fortinet_ML2_Subnet,
+                                                 subnet_id=subnet_id)
             db_subnetv2 = fortinet_db.query_record(context, models_v2.Subnet,
                                                    id=subnet_id)
             if port['device_owner'] in ['network:router_gateway']:
                 if fortinet_db.query_record(context, ext_db.ExternalNetwork,
                                             network_id=port['network_id']):
-                    #delete ippool and its related firewall policy
+                    # delete ippool and its related firewall policy
                     utils.clr_ext_gw(self, context, port)
 
             elif port['device_owner'] in ['compute:nova', 'compute:None', '']:
@@ -472,7 +472,7 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
         """
         LOG.debug("bind_port() called")
         if (context.current['device_owner'] ==
-            l3_constants.DEVICE_OWNER_ROUTER_INTF):
+                l3_constants.DEVICE_OWNER_ROUTER_INTF):
             # check controller to see if the port exists
             # so this driver can be run in parallel with others that add
             # support for external port bindings
@@ -489,4 +489,4 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
                 context.set_binding(
                     segment[driver_api.ID], portbindings.VIF_TYPE_OVS,
                     {portbindings.CAP_PORT_FILTER: False,
-                    portbindings.OVS_HYBRID_PLUG: False})
+                     portbindings.OVS_HYBRID_PLUG: False})
