@@ -58,8 +58,8 @@ cfg.CONF(args=CFG_ARGS, project='neutron',
          **CFG_KWARGS)
 cfg.CONF.import_group('ml2_fortinet',
                       'bell_fortinet.common.config')
-cfg.CONF.import_group('ml2',
-                      'bell_fortinet.common.config')
+# cfg.CONF.import_group('ml2',
+#                       'bell_fortinet.common.config')
 
 
 class Progress(object):
