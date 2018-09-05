@@ -463,13 +463,28 @@ def floatingip_migration(context, l3_driver):
 def main():
     try:
         context = Fake_context()
+        LOG.error("context >>>>>")
+
         mech_driver = init_mech_driver()
+        LOG.error("mech_driver >>>>>")
+
         l3_driver = Fake_FortinetL3ServicePlugin()
+        LOG.error("l3_driver >>>>>")
+
         router_migration(context, l3_driver)
+        LOG.error("router_migration >>>>>")
+
         network_migration(context, mech_driver)
+        LOG.error("network_migration >>>>>")
+
         subnet_migration(context, mech_driver)
+        LOG.error("subnet_migration >>>>>")
+
         port_migration(context, mech_driver, l3_driver)
+        LOG.error("port_migration >>>>>")
+
         floatingip_migration(context, l3_driver)
+        LOG.error("floatingip_migration >>>>>")
     except Exception as e:
         raise (e)
     print "\nmigration completed.\n"
