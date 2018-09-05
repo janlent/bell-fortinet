@@ -86,6 +86,11 @@ class FortinetMechanismDriver(driver_api.MechanismDriver):
 
         session = db_api.get_session()
         try:
+            LOG.error(">>>---<<<<<<<<<<")
+            LOG.error(session)
+            LOG.error(const.EXT_VDOM)
+            LOG.error(const.FAKE_TENANT_ID)
+            
             utils.add_vdom(self, session, vdom=const.EXT_VDOM,
                            tenant_id=const.FAKE_TENANT_ID)
             LOG.error(">>>---<<<<<<<<<<")
